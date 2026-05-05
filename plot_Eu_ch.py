@@ -12,7 +12,7 @@ derivatives_dir = Path(
 )
 events = get_run_events(derivatives_dir, sub="01", ses=2, run=4)
 estimator = UncertaintyEstimator(
-    latent_levels=[40, 60],
+    latent_levels=[20, 40, 60, 80],
     sd=10,
     learning_params={"vol": 0.04},
     option_cols=["obsA", "obsB"],
@@ -71,12 +71,6 @@ ax.plot(
 ax.plot(
     trials, mean_B, color=COL_B, lw=1.6, ls="--", label="True mean — option B", zorder=4
 )
-
-# # ── Axes labels & limits ───────────────────────────────────────────────────
-# ax.set_xlabel("Trial", labelpad=4)
-# ax.set_ylabel("Surprise  /  Reward mean (a.u.)", labelpad=6)
-# ax.yaxis.set_major_locator(ticker.MultipleLocator(20))
-# ax.set_xlim(-1, len(trials))
 
 # ── Legend ─────────────────────────────────────────────────────────────────
 leg = ax.legend(

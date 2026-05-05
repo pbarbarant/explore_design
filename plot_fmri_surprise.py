@@ -51,7 +51,7 @@ def get_fmri_sessions(derivatives_dir, subject, task_label):
 
 def make_dmtx_one_run(model, events, confounds):
     estimator = SurpriseEstimator(
-        latent_levels=[40, 60],
+        latent_levels=[20, 40, 60, 80],
         sd=10,
         learning_params={"vol": 0.04},
         option_cols=["obsA", "obsB"],

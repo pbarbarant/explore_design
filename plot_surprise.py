@@ -10,11 +10,11 @@ from exd.models.ideal_observer import SurpriseEstimator
 derivatives_dir = Path(
     "/home/plbarbarant/nasShare/projects/protocols/ExplorePlus_MeynielPaunovRaglio_2024/derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0"
 )
-events = get_run_events(derivatives_dir, sub="15", ses=1, run=3)
+events = get_run_events(derivatives_dir, sub="01", ses=2, run=4)
 estimator = SurpriseEstimator(
-    latent_levels=[40, 60],
+    latent_levels=[20, 40, 60, 80],
     sd=10,
-    learning_params={"vol": 0.04},
+    learning_params={"vol": 0.1},
     option_cols=["obsA", "obsB"],
     outcome_range=(1, 100),
     unobserved_value=np.nan,
@@ -73,12 +73,6 @@ ax.plot(
     trials, mean_B, color=COL_B, lw=1.6, ls="--", label="True mean — option B", zorder=4
 )
 
-# # ── Axes labels & limits ───────────────────────────────────────────────────
-# ax.set_xlabel("Trial", labelpad=4)
-# ax.set_ylabel("Surprise  /  Reward mean (a.u.)", labelpad=6)
-# ax.yaxis.set_major_locator(ticker.MultipleLocator(20))
-# ax.set_xlim(-1, len(trials))
-
 # ── Legend ─────────────────────────────────────────────────────────────────
 leg = ax.legend(
     frameon=False,
@@ -89,5 +83,7 @@ leg = ax.legend(
 )
 
 fig.tight_layout()
-# fig.savefig("surprise_plot.pdf", bbox_inches="tight")
+fig.savefig(
+    "/home/plbarbarant/repos/explore_design/outputs/surprise.png", bbox_inches="tight"
+)
 plt.show()
