@@ -89,13 +89,6 @@ def make_dmtx_one_run(model, events, confounds):
     return dtmx
 
 
-# estimator = DeltaRuleEstimator(
-#     learning_params={"lr-cu.c": 0.04, "lr-cu.u": 0.00, "lr-sd.low": 0.01},
-#     initial_prediction=50,
-#     option_cols=["obsA", "obsB"],
-#     condition_cols=["forced", "SD"],
-# )
-
 derivatives_dir = Path(
     "/home/plbarbarant/nasShare/projects/protocols/ExplorePlus_MeynielPaunovRaglio_2024/derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0"
 )
