@@ -1,0 +1,23 @@
+# %%
+from pathlib import Path
+
+import pandas as pd
+
+
+def make_events(features: pd.DataFrame):
+    onset = features.trial_start / 1000
+    duration = (features.trial_end - features.trial_start) / 1000
+    features = features.drop(columns=["Unnamed: 0"])
+    events = pd.concat(
+        [onset.rename("onset"), duration.rename("duration"), features],
+        axis=1,
+    )
+    return events
+
+
+def get_run_events(derivatives_dir, sub, ses, run):
+    suffix = f"/sub-{sub}/ses-{ses}/beh/sub-{sub}_ses-{ses}_task-ExplorePlus_run-{run:02d}_desc-formatted_beh.tsv"
+    path_beh = str(Path(derivatives_dir)) + suffix
+    features = pd.read_csv(path_beh, sep="\t", index_col=None)
+    events = make_events(features)
+    return events

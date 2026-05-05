@@ -69,6 +69,7 @@ def _get_single_vol(
     outcome_values=None,
     outcome_prior=None,
 ):
+    mask = pd.Series([True] * len(spec), index=spec.index)
 
     if "cu" in splitids:
         mask &= spec["cu"] == ("c" if not np.isnan(obs) else "u")
@@ -216,6 +217,10 @@ class IdealObserverEstimator(BaseEstimator):
         Columns in X with per-option observations.
     condition_cols : list of str, optional
         Columns in X used as trial conditions for split volatilities.
+    return_outcome_dist : bool, optional
+        Whether to return the predictive outcome distribution.
+    outcome_range : tuple, optional
+        Range of possible outcome values.
     """
 
     def __init__(
@@ -225,12 +230,18 @@ class IdealObserverEstimator(BaseEstimator):
         learning_params,
         option_cols=("obsA", "obsB"),
         condition_cols=None,
+        return_outcome_dist=False,
+        outcome_range=None,
+        normalize_outcome_dist=True,
     ):
         self.latent_levels = latent_levels
         self.sd = sd
         self.learning_params = learning_params
         self.option_cols = option_cols
         self.condition_cols = condition_cols
+        self.return_outcome_dist = return_outcome_dist
+        self.outcome_range = outcome_range
+        self.normalize_outcome_dist = normalize_outcome_dist
 
     def _parse_X(self, X):
         obs = X[list(self.option_cols)].to_numpy().T  # (n_options, n_trials)
@@ -249,6 +260,9 @@ class IdealObserverEstimator(BaseEstimator):
             sd=self.sd,
             learning_params=self.learning_params,
             conditions=conditions,
+            return_outcome_dist=self.return_outcome_dist,
+            outcome_range=self.outcome_range,
+            normalize_outcome_dist=self.normalize_outcome_dist,
         )
         self.option_cols_ = list(self.option_cols)
         return self
@@ -266,6 +280,138 @@ class IdealObserverEstimator(BaseEstimator):
         expectations = np.einsum("l,lot->ot", levels, pred).T  # (n_trials, n_options)
         cols = ["IO__" + c for c in self.option_cols_]
         return pd.DataFrame(expectations, columns=cols, index=X.index)
+
+    def fit_predict(self, X: pd.DataFrame, y=None):
+        return self.fit(X, y).predict(X)
+
+
+def set_unobserved_value(quantity, unobserved_value=0):
+    if isinstance(unobserved_value, int):
+        quantity[np.isnan(quantity)] = unobserved_value
+    else:
+        quantity[quantity == 0] = np.nan
+    return quantity
+
+
+def get_missing(obs):
+    return np.where(np.all(np.isnan(obs), axis=0))[0]
+
+
+def get_outcome_surprise(outcome_distribution, obs, unobserved_value=0):
+    n_options, n_trials = obs.shape
+    surprise = np.full((n_options, n_trials), np.nan)
+    for iopt in range(n_options):
+        for itrial in range(n_trials):
+            if ~np.isnan(obs[iopt, itrial]):
+                surprise[iopt, itrial] = -np.log(
+                    outcome_distribution[int(obs[iopt, itrial]), iopt, itrial]
+                )
+    surprise = set_unobserved_value(surprise, unobserved_value)
+    surprise[:, get_missing(obs)] = np.nan
+    return surprise
+
+
+class SurpriseEstimator(IdealObserverEstimator):
+    """
+    Extends IdealObserverEstimator to predict outcome surprise (-log P(obs)).
+    Requires return_outcome_dist=True and outcome_range to be set.
+
+    Parameters
+    ----------
+    unobserved_value : int or 'nan'
+        Value to fill for unchosen options. Int (e.g. 0) or anything non-int → NaN.
+    All other parameters inherited from IdealObserverEstimator.
+    """
+
+    def __init__(
+        self,
+        latent_levels,
+        sd,
+        learning_params,
+        option_cols=("obsA", "obsB"),
+        condition_cols=None,
+        outcome_range=None,
+        normalize_outcome_dist=True,
+        unobserved_value=0,
+    ):
+        super().__init__(
+            latent_levels=latent_levels,
+            sd=sd,
+            learning_params=learning_params,
+            option_cols=option_cols,
+            condition_cols=condition_cols,
+            return_outcome_dist=True,
+            outcome_range=outcome_range,
+            normalize_outcome_dist=normalize_outcome_dist,
+        )
+        self.unobserved_value = unobserved_value
+
+    def predict(self, X: pd.DataFrame):
+        """
+        Returns surprise (-log P(obs)) per option per trial.
+        Uses the predictive outcome distribution (prior to observing the trial).
+        Shape: (n_trials, n_options).
+        """
+        check_is_fitted(self, "posteriors_")
+        obs, _ = self._parse_X(X)
+        # predictive_outcome_distribution[:,  :, 1:] aligns index 0 with trial 0
+        # (the distribution formed before seeing trial t's outcome)
+        out_dist = self.posteriors_["predictive_outcome_distribution"][:, :, :-1]
+        surprise = get_outcome_surprise(out_dist, obs, self.unobserved_value)
+        cols = ["Surprise__" + c for c in self.option_cols_]
+        return pd.DataFrame(surprise.T, columns=cols, index=X.index)
+
+
+class UncertaintyEstimator(IdealObserverEstimator):
+    """
+    Extends IdealObserverEstimator to predict estimation uncertainty
+    (1 - max posterior) on the chosen option per trial.
+
+    Parameters
+    ----------
+    unobserved_value : int or 'nan'
+        Value to fill for unchosen options (same convention as SurpriseEstimator).
+    All other parameters inherited from IdealObserverEstimator.
+    """
+
+    def __init__(
+        self,
+        latent_levels,
+        sd,
+        learning_params,
+        option_cols=("obsA", "obsB"),
+        condition_cols=None,
+        unobserved_value=0,
+    ):
+        super().__init__(
+            latent_levels=latent_levels,
+            sd=sd,
+            learning_params=learning_params,
+            option_cols=option_cols,
+            condition_cols=condition_cols,
+        )
+        self.unobserved_value = unobserved_value
+
+    def predict(self, X: pd.DataFrame):
+        check_is_fitted(self, "posteriors_")
+        obs, _ = self._parse_X(X)
+        n_options, n_trials = obs.shape
+
+        # prevol_posterior: (n_levels, n_options, n_trials+1)
+        # index 1: onwards aligns with trial 0 (after observing trial t)
+        prevol = self.posteriors_["prevol_posterior"][:, :, 1:]
+
+        uncertainty = np.full((n_options, n_trials), np.nan)
+        for iopt in range(n_options):
+            for itrial in range(n_trials):
+                if ~np.isnan(obs[iopt, itrial]):
+                    uncertainty[iopt, itrial] = 1 - np.max(prevol[:, iopt, itrial])
+
+        uncertainty = set_unobserved_value(uncertainty, self.unobserved_value)
+        uncertainty[:, get_missing(obs)] = np.nan
+
+        cols = ["Eu_ch__" + c for c in self.option_cols_]
+        return pd.DataFrame(uncertainty.T, columns=cols, index=X.index)
 
     def fit_predict(self, X: pd.DataFrame, y=None):
         return self.fit(X, y).predict(X)
