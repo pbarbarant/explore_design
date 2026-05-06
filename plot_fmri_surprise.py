@@ -52,8 +52,8 @@ def get_fmri_sessions(derivatives_dir, subject, task_label):
 def make_dmtx_one_run(model, events, confounds):
     estimator = SurpriseEstimator(
         latent_levels=[20, 40, 60, 80],
-        sd=10,
-        learning_params={"vol": 0.04},
+        sd=events["SD"].unique()[0],
+        learning_params={"vol": 0.0416},
         option_cols=["obsA", "obsB"],
         outcome_range=(1, 100),
     )
@@ -100,17 +100,17 @@ space_label = "MNI152NLin2009cAsym"
 derivatives_folder = "derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0/"
 
 SUBJECTS = [
-    "01",
-    "04",
-    "05",
-    "06",
-    "08",
-    "09",
-    "10",
-    "11",
-    "13",
-    "14",
-    "15",
+    # "01",
+    # "04",
+    # "05",
+    # "06",
+    # "08",
+    # "09",
+    # "10",
+    # "11",
+    # "13",
+    # "14",
+    # "15",
     "16",
     "17",
     "18",

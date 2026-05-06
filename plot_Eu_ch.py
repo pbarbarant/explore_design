@@ -13,8 +13,8 @@ derivatives_dir = Path(
 events = get_run_events(derivatives_dir, sub="01", ses=2, run=4)
 estimator = UncertaintyEstimator(
     latent_levels=[20, 40, 60, 80],
-    sd=10,
-    learning_params={"vol": 0.04},
+    sd=events["SD"].unique()[0],
+    learning_params={"vol": 0.0416},
     option_cols=["obsA", "obsB"],
     unobserved_value=np.nan,
 )
