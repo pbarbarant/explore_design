@@ -18,7 +18,7 @@ from exd.events import get_run_events
 from exd.models.ideal_observer import SurpriseEstimator
 
 
-def filter_confounds(confounds: pd.DataFrame) -> pd.DataFrame:
+def filter_confounds(confounds: pd.DataFrame):
     # Keep only the motion confounds
     prefixes = ["trans", "rot", "motion"]
     columns = confounds.columns
@@ -100,16 +100,16 @@ space_label = "MNI152NLin2009cAsym"
 derivatives_folder = "derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0/"
 
 SUBJECTS = [
-    # "01",
-    # "04",
-    # "05",
-    # "06",
-    # "08",
-    # "09",
-    # "10",
-    # "11",
-    # "13",
-    # "14",
+    "01",
+    "04",
+    "05",
+    "06",
+    "08",
+    "09",
+    "10",
+    "11",
+    "13",
+    "14",
     # "15",
     "16",
     "17",
@@ -143,6 +143,7 @@ for subject in tqdm(SUBJECTS, desc="Processing subject: "):
         n_jobs=10,
         verbose=10,
     )
+    # Regarder les masks
     model = models[0]
     run_imgs = run_imgs[0]
     confounds = confounds[0]
@@ -172,7 +173,7 @@ for subject in tqdm(SUBJECTS, desc="Processing subject: "):
                 rescale=True,
                 output_file=f"/home/plbarbarant/repos/explore_design/outputs/sub-{subject}_ses-{ses}_run-{run_id}_dmtx.png",
             )
-
+        # TODO: Concatenate design matrices
         model.fit(run_imgs=selected_imgs, design_matrices=design_matrices)
         z_map = model.compute_contrast("Surprise", output_type="z_score")
 
