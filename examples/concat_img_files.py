@@ -3,7 +3,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pre_commit
 
 path = Path("/home/plbarbarant/repos/explore_design/outputs/")
 
@@ -17,9 +16,9 @@ SUBJECTS = [
     "10",
     "11",
     "13",
-    "14",
+    # "14",
     # "15",
-    "16",
+    # "16",
     # "17",
     # "18",
     # "19",
@@ -34,7 +33,7 @@ def concat_img_files(path, qty):
     return img_files
 
 
-img_files = concat_img_files(path, "motor")
+img_files = concat_img_files(path, "surprise")
 
 total_array = []
 for subject in SUBJECTS:
@@ -53,5 +52,5 @@ total_array = np.concatenate(total_array, axis=0)
 plt.imshow(total_array)
 # remove the axes
 plt.axis("off")
-plt.savefig(path / "concatenated_motor.png", dpi=2000, bbox_inches="tight")
+plt.savefig(path / "concatenated_surprise.png", dpi=2000, bbox_inches="tight")
 plt.show()

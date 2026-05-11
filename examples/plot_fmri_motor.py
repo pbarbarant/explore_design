@@ -19,16 +19,6 @@ from exd.events import get_run_events
 from exd.models.motor import MotorEstimator
 
 
-def filter_confounds(confounds: pd.DataFrame) -> pd.DataFrame:
-    # Keep only the motion confounds
-    prefixes = ["trans", "rot", "motion"]
-    columns = confounds.columns
-    filtered_cols = [
-        col for col in columns if any(col.startswith(prefix) for prefix in prefixes)
-    ]
-    return confounds[filtered_cols]
-
-
 def get_subject_session_runs_beh(data_dir, subject, ses, task_label) -> set:
     """Glob BIDS files to find available run indices for a subject/session."""
     pattern = f"sub-{subject}/ses-{ses}/beh/*task-{task_label}*_run-*_beh.tsv"
@@ -120,7 +110,6 @@ for subject in tqdm(SUBJECTS, desc="Processing subject: "):
         hrf_model="spm + derivative",
         derivatives_folder=derivatives_folder,
         confounds_strategy=["motion"],
-        # confounds_motion="basic",
         n_jobs=10,
         verbose=10,
     )
