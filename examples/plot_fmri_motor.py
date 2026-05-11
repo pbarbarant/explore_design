@@ -3,12 +3,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from nilearn.datasets import fetch_surf_fsaverage
 from nilearn.glm.first_level import (
     first_level_from_bids,
     make_first_level_design_matrix,
 )
-from nilearn.plotting import plot_design_matrix, plot_glass_brain
+from nilearn.plotting import (
+    plot_design_matrix,
+    plot_event,
+    plot_img_on_surf,
+    plot_stat_map,
+)
 from tqdm import tqdm
 
 from exd.events import get_run_events
@@ -32,13 +36,6 @@ def get_subject_session_runs_beh(data_dir, subject, ses, task_label) -> set:
     return set([int(f.stem.split("run-")[1].split("_")[0]) for f in run_files])
 
 
-def get_subject_session_runs_nii(data_dir, subject, ses, task_label) -> set:
-    """Glob BIDS files to find available run indices for a subject/session."""
-    pattern = f"sub-{subject}/ses-{ses}/func/*task-{task_label}*_run-*.nii.gz"
-    run_files = sorted(Path(data_dir).glob(pattern))
-    return set([int(f.stem.split("run-")[1].split("_")[0]) for f in run_files])
-
-
 def get_fmri_sessions(derivatives_dir, subject, task_label) -> set:
     """Get available fMRI sessions for a subject."""
     pattern = f"sub-{subject}/ses-*/func"
@@ -52,9 +49,8 @@ def make_dmtx_one_run(model, events, confounds) -> pd.DataFrame:
     )
     events["trial_type"] = estimator.fit_predict(events)
     # Create design matrix
-    confounds = filter_confounds(confounds)
     # Interpolate missing values in confounds
-    regs = confounds.interpolate(limit_direction="both").to_numpy()
+    regs = confounds.fillna(0).to_numpy()
     # Create the design matrix
     n_scans = len(confounds)
     start_time = model.slice_time_ref * model.t_r
@@ -120,8 +116,11 @@ for subject in tqdm(SUBJECTS, desc="Processing subject: "):
         sub_labels=[subject],
         smoothing_fwhm=6.0,
         high_pass=1 / 128,
+        t_r=1.71,
         hrf_model="spm + derivative",
         derivatives_folder=derivatives_folder,
+        confounds_strategy=["motion"],
+        # confounds_motion="basic",
         n_jobs=10,
         verbose=10,
     )
@@ -130,22 +129,33 @@ for subject in tqdm(SUBJECTS, desc="Processing subject: "):
     confounds = confounds[0]
 
     fmri_sessions = get_fmri_sessions(derivatives_dir, subject, task_label)
+    img_map = {
+        (
+            int(p.split("ses-")[1].split("/")[0]),
+            int(p.split("run-")[1].split("_")[0]),
+        ): p
+        for p in run_imgs
+    }
+    conf_map = {
+        (
+            int(p.split("ses-")[1].split("/")[0]),
+            int(p.split("run-")[1].split("_")[0]),
+        ): c
+        for p, c in zip(run_imgs, confounds)
+    }
 
     for ses in fmri_sessions:
-        run_ids = set.intersection(
-            get_subject_session_runs_nii(derivatives_dir, subject, ses, task_label),
-            get_subject_session_runs_beh(derivatives_dir, subject, ses, task_label),
+        beh_runs = get_subject_session_runs_beh(
+            derivatives_dir, subject, ses, task_label
         )
-        selected_run_idx = [
-            i
-            for i, img in enumerate(run_imgs)
-            if f"ses-{ses}" in img and any(f"run-{i:02d}" in img for i in run_ids)
-        ]
-        selected_imgs = [run_imgs[i] for i in selected_run_idx]
-        selected_confounds = [confounds[i] for i in selected_run_idx]
+        keys = sorted(k for k in img_map if k[0] == ses and k[1] in beh_runs)
+
+        selected_imgs = [img_map[k] for k in keys]
+        selected_confounds = [conf_map[k] for k in keys]
+        selected_run_ids = [k[1] for k in keys]
 
         design_matrices = []
-        for i, run_id in enumerate(run_ids):
+        for i, run_id in enumerate(selected_run_ids):
             events = get_run_events(
                 derivatives_dir, sub=subject, ses=ses, run=run_id, onset="RT"
             )
@@ -161,10 +171,12 @@ for subject in tqdm(SUBJECTS, desc="Processing subject: "):
         z_map = model.compute_contrast("R - L", output_type="z_score")
 
         # Plot positive (left) and negative maps (right)
-        plot_glass_brain(
-            stat_map=z_map,
+        plot_stat_map(
+            stat_map_img=z_map,
             colorbar=True,
-            plot_abs=False,
-            title=f"Motor R - L (z-score) - sub-{subject} ses-{ses}",
+            threshold=1.96,
+            display_mode="z",
+            cut_coords=[-10, 15, 30, 40, 50],
+            title=f"Motor (R - L) (z-score) - sub-{subject} ses-{ses}",
             output_file=f"/home/plbarbarant/repos/explore_design/outputs/sub-{subject}_ses-{ses}_motor.png",
         )
