@@ -2,7 +2,7 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
+from nilearn import plotting
 
 path = Path("/home/plbarbarant/repos/explore_design/outputs/")
 
@@ -14,8 +14,8 @@ SUBJECTS = [
     "08",
     "09",
     "10",
-    "11",
-    "13",
+    # "11",
+    # "13",
     # "14",
     # "15",
     # "16",
@@ -27,30 +27,26 @@ SUBJECTS = [
 
 
 def concat_img_files(path, qty):
-    pattern = f"sub-*_ses-*_{qty}.png"
+    pattern = f"sub-*_ses-*_{qty}.nii.gz"
     img_files = sorted(list(path.glob(pattern)))
-    img_files = [f for f in img_files if "dmtx" not in str(f)]
     return img_files
 
 
-img_files = concat_img_files(path, "surprise")
+img_files = concat_img_files(path, "motor")
+fig, axes = plt.subplots(len(SUBJECTS), 2, figsize=(20, 5 * len(SUBJECTS)))
 
-total_array = []
-for subject in SUBJECTS:
+for subject, ax in zip(SUBJECTS, axes):
     print(f"Processing subject {subject}")
     # Concatenate the two sessions for the current subject
     subject_img_files = [str(f) for f in img_files if f"sub-{subject}" in f.name]
+    ses = [f.split("_")[2] for f in subject_img_files]
 
-    array1 = plt.imread(subject_img_files[0])
-    array2 = plt.imread(subject_img_files[1])
-    concatenated_array = np.concatenate((array1, array2), axis=1)
+    plotting.plot_glass_brain(
+        subject_img_files[0], axes=ax[0], title=f"Motor map sub-{subject} {ses[0]}"
+    )
+    plotting.plot_glass_brain(
+        subject_img_files[1], axes=ax[1], title=f"Motor map sub-{subject} {ses[1]}"
+    )
 
-    total_array.append(concatenated_array)
-
-total_array = np.concatenate(total_array, axis=0)
-
-plt.imshow(total_array)
-# remove the axes
-plt.axis("off")
-plt.savefig(path / "concatenated_surprise.png", dpi=2000, bbox_inches="tight")
+plt.savefig(path / "concatenated_motor.png", dpi=300, bbox_inches="tight")
 plt.show()
