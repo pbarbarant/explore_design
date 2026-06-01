@@ -1,5 +1,6 @@
 import pandas as pd
 from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.utils.validation import check_is_fitted
 
 
 class MotorEstimator(BaseEstimator, RegressorMixin):
@@ -9,9 +10,9 @@ class MotorEstimator(BaseEstimator, RegressorMixin):
     def fit(self, X: pd.DataFrame, y=None):
         def _func(x):
             if x == "A":
-                return "R"
-            elif x == "B":
                 return "L"
+            elif x == "B":
+                return "R"
             else:
                 return pd.NA
 
@@ -20,8 +21,8 @@ class MotorEstimator(BaseEstimator, RegressorMixin):
         return self
 
     def predict(self, X: pd.DataFrame):
+        check_is_fitted(self, "output_col")
         return self.output_col
 
     def fit_predict(self, X: pd.DataFrame, y=None):
-        # check_is_fitted(self, "reward_predictions_")
         return self.fit(X, y).predict(X)
