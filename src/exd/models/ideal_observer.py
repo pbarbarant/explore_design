@@ -297,14 +297,16 @@ def get_missing(obs):
     return np.where(np.all(np.isnan(obs), axis=0))[0]
 
 
-def get_outcome_surprise(outcome_distribution, obs, unobserved_value=0):
+def get_outcome_surprise(outcome_distribution, obs, outcome_range, unobserved_value=0):
     n_options, n_trials = obs.shape
     surprise = np.full((n_options, n_trials), np.nan)
     for iopt in range(n_options):
         for itrial in range(n_trials):
             if ~np.isnan(obs[iopt, itrial]):
+                # Offset the index by the min of outcome_range
+                idx = int(obs[iopt, itrial]) - outcome_range[0]
                 surprise[iopt, itrial] = -np.log(
-                    outcome_distribution[int(obs[iopt, itrial]), iopt, itrial]
+                    outcome_distribution[idx, iopt, itrial]
                 )
     surprise = set_unobserved_value(surprise, unobserved_value)
     surprise[:, get_missing(obs)] = np.nan
@@ -357,7 +359,9 @@ class SurpriseEstimator(IdealObserverEstimator):
         # predictive_outcome_distribution[:,  :, 1:] aligns index 0 with trial 0
         # (the distribution formed before seeing trial t's outcome)
         out_dist = self.posteriors_["predictive_outcome_distribution"][:, :, :-1]
-        surprise = get_outcome_surprise(out_dist, obs, self.unobserved_value)
+        surprise = get_outcome_surprise(
+            out_dist, obs, self.outcome_range, self.unobserved_value
+        )
         cols = ["Surprise__" + c for c in self.option_cols_]
         return pd.DataFrame(surprise.T, columns=cols, index=X.index)
 
