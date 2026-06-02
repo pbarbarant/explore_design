@@ -3,50 +3,14 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from nilearn.datasets import fetch_surf_fsaverage
-from nilearn.glm.first_level import (
-    first_level_from_bids,
-    make_first_level_design_matrix,
-)
-from nilearn.plotting import plot_img_on_surf
-from tqdm import tqdm
+from nilearn.glm.first_level import compute_regressor, make_first_level_design_matrix
+from nilearn.glm.first_level.first_level import _list_valid_subjects
 
-from exd.events import get_run_events
+from exd.fmri_utils import first_level_analysis
 from exd.models.ideal_observer import UncertaintyEstimator
 
 
-def filter_confounds(confounds: pd.DataFrame) -> pd.DataFrame:
-    # Keep only the motion confounds
-    prefixes = ["trans", "rot", "motion"]
-    columns = confounds.columns
-    filtered_cols = [
-        col for col in columns if any(col.startswith(prefix) for prefix in prefixes)
-    ]
-    return confounds[filtered_cols]
-
-
-def get_subject_session_runs_beh(data_dir, subject, ses, task_label) -> set:
-    """Glob BIDS files to find available run indices for a subject/session."""
-    pattern = f"sub-{subject}/ses-{ses}/beh/*task-{task_label}*_run-*_beh.tsv"
-    run_files = sorted(Path(data_dir).glob(pattern))
-    return set([int(f.stem.split("run-")[1].split("_")[0]) for f in run_files])
-
-
-def get_subject_session_runs_nii(data_dir, subject, ses, task_label) -> set:
-    """Glob BIDS files to find available run indices for a subject/session."""
-    pattern = f"sub-{subject}/ses-{ses}/func/*task-{task_label}*_run-*.nii.gz"
-    run_files = sorted(Path(data_dir).glob(pattern))
-    return set([int(f.stem.split("run-")[1].split("_")[0]) for f in run_files])
-
-
-def get_fmri_sessions(derivatives_dir, subject, task_label) -> set:
-    """Get available fMRI sessions for a subject."""
-    pattern = f"sub-{subject}/ses-*/func"
-    func_dirs = sorted(Path(derivatives_dir).glob(pattern))
-    return set([int(f.parent.name.split("-")[1]) for f in func_dirs])
-
-
-def make_dmtx_one_run(model, events, confounds) -> pd.DataFrame:
+def make_dmtx_one_run_Eu_ch(model, events, confounds) -> pd.DataFrame:
     estimator = UncertaintyEstimator(
         latent_levels=[20, 40, 60, 80],
         sd=events["SD"].unique()[0],
@@ -55,22 +19,46 @@ def make_dmtx_one_run(model, events, confounds) -> pd.DataFrame:
     )
     pred = estimator.fit_predict(events)
     pred["Eu_ch"] = pred["Eu_ch__obsA"] + pred["Eu_ch__obsB"]
-    pred = pred.drop(columns=["Eu_ch__obsA", "Eu_ch__obsB"])
 
-    # Create design matrix
-    confounds = filter_confounds(confounds)
-    # Concatenate the models_events columns except for onset and duration
-    confounds = pd.concat([pred, confounds], axis=1)
-    # Interpolate missing values in confounds
-    regs = confounds.interpolate(limit_direction="both").to_numpy()
-    # Create the design matrix
+    # Frame times
     n_scans = len(confounds)
     start_time = model.slice_time_ref * model.t_r
     end_time = (n_scans - 1 + model.slice_time_ref) * model.t_r
     frame_times = np.linspace(start_time, end_time, n_scans)
+
+    # Eu_ch events without modulation
+    condition = np.array(
+        [
+            events["onset"].values,
+            events["duration"].values,
+            np.ones(len(events)),  # amplitude = 1, i.e. unmodulated
+        ]
+    )
+    eu_ch_no_mod, _ = compute_regressor(
+        exp_condition=condition,
+        hrf_model=model.hrf_model,
+        frame_times=frame_times,
+        min_onset=model.min_onset,
+    )
+    confounds = confounds.copy()
+    confounds.insert(0, "Eu_ch_no_modulation", eu_ch_no_mod[:, 0])
+
+    # Eu_ch events with modulation
+    modulated_events = pd.DataFrame(
+        {
+            "onset": events["onset"].values,
+            "duration": events["duration"].values,
+            "trial_type": "Eu_ch",
+            "modulation": pred["Eu_ch"].values,
+        }
+    )
+
+    # Replace missing values in confounds
+    regs = confounds.fillna(0).to_numpy()
+
     dmtx = make_first_level_design_matrix(
         frame_times=frame_times,
-        events=events,
+        events=modulated_events,
         hrf_model=model.hrf_model,
         drift_model=model.drift_model,
         high_pass=model.high_pass,
@@ -80,99 +68,30 @@ def make_dmtx_one_run(model, events, confounds) -> pd.DataFrame:
         add_reg_names=confounds.columns.tolist(),
         min_onset=model.min_onset,
     )
-    # Remove the dummy* columns
-    dtmx = dmtx.loc[:, ~dmtx.columns.str.startswith("dummy")]
-    return dtmx
+
+    # Remove dummy columns
+    dmtx = dmtx.loc[:, ~dmtx.columns.str.startswith("dummy")]
+    return dmtx
 
 
-derivatives_dir = Path(
-    "/home/plbarbarant/nasShare/projects/protocols/ExplorePlus_MeynielPaunovRaglio_2024/derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0"
-)
-data_dir = (
-    "/home/plbarbarant/nasShare/projects/protocols/ExplorePlus_MeynielPaunovRaglio_2024"
-)
-task_label = "ExplorePlus"
-space_label = "MNI152NLin2009cAsym"
-derivatives_folder = "derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0/"
-
-SUBJECTS = [
-    "01",
-    "04",
-    "05",
-    "06",
-    "08",
-    "09",
-    "10",
-    "11",
-    "13",
-    "14",
-    # "15",
-    "16",
-    "17",
-    "18",
-    "19",
-    "20",
-]
-
-
-fsaverage = fetch_surf_fsaverage()
-fsaverage_infl = {
-    "infl_left": fsaverage["infl_left"],
-    "infl_right": fsaverage["infl_right"],
-}
-
-for subject in tqdm(SUBJECTS, desc="Processing subject: "):
-    (
-        models,
-        run_imgs,
-        _,
-        confounds,
-    ) = first_level_from_bids(
-        data_dir,
-        task_label,
-        space_label,
-        sub_labels=[subject],
-        smoothing_fwhm=6.0,
-        high_pass=1 / 128,
-        hrf_model="spm + derivative",
-        derivatives_folder=derivatives_folder,
-        n_jobs=10,
-        verbose=10,
+if __name__ == "__main__":
+    mask_img = "data/mask.nii.gz"
+    data_dir = Path(
+        "/home/plbarbarant/nasShare/projects/protocols/ExplorePlus_MeynielPaunovRaglio_2024"
     )
-    model = models[0]
-    run_imgs = run_imgs[0]
-    confounds = confounds[0]
-
-    fmri_sessions = get_fmri_sessions(derivatives_dir, subject, task_label)
-
-    for ses in fmri_sessions:
-        run_ids = set.intersection(
-            get_subject_session_runs_nii(derivatives_dir, subject, ses, task_label),
-            get_subject_session_runs_beh(derivatives_dir, subject, ses, task_label),
-        )
-        selected_run_idx = [
-            i
-            for i, img in enumerate(run_imgs)
-            if f"ses-{ses}" in img and any(f"run-{i:02d}" in img for i in run_ids)
-        ]
-        selected_imgs = [run_imgs[i] for i in selected_run_idx]
-        selected_confounds = [confounds[i] for i in selected_run_idx]
-
-        design_matrices = []
-        for i, run_id in enumerate(run_ids):
-            events = get_run_events(derivatives_dir, sub=subject, ses=ses, run=run_id)
-            dmtx = make_dmtx_one_run(model, events, selected_confounds[i])
-            design_matrices.append(dmtx)
-
-        model.fit(run_imgs=selected_imgs, design_matrices=design_matrices)
-        z_map = model.compute_contrast("Eu_ch", output_type="z_score")
-
-        # Plot positive (left) and negative maps (right)
-        plot_img_on_surf(
-            stat_map=z_map,
-            colorbar=True,
-            bg_on_data=False,
-            inflate=True,
-            title=f"Eu_ch (z-score) - sub-{subject} ses-{ses}",
-            output_file=f"/home/plbarbarant/repos/explore_design/outputs/sub-{subject}_ses-{ses}_Eu_ch.png",
-        )
+    task_label = "ExplorePlus"
+    space_label = "MNI152NLin2009cAsym"
+    derivatives_folder = "derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0/"
+    subjects = _list_valid_subjects(str(data_dir / derivatives_folder), None)
+    first_level_analysis(
+        data_dir=str(data_dir),
+        task_label=task_label,
+        space_label=space_label,
+        derivatives_folder=derivatives_folder,
+        subjects=subjects,
+        mask_img=mask_img,
+        quantity_name="Eu_ch",
+        onset="RT",
+        contrast_name="Eu_ch",
+        dmtx_functor=make_dmtx_one_run_Eu_ch,
+    )
