@@ -10,7 +10,7 @@ from exd.models.ideal_observer import SurpriseEstimator
 derivatives_dir = Path(
     "/home/plbarbarant/nasShare/projects/protocols/ExplorePlus_MeynielPaunovRaglio_2024/derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0"
 )
-events = get_run_events(derivatives_dir, sub="01", ses=2, run=4)
+events = get_run_events(derivatives_dir, sub="01", ses=2, run=2, onset="outcome")
 estimator = SurpriseEstimator(
     latent_levels=[20, 40, 60, 80],
     sd=events["SD"].unique()[0],

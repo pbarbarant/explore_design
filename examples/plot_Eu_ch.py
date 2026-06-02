@@ -10,7 +10,7 @@ from exd.models.ideal_observer import UncertaintyEstimator
 derivatives_dir = Path(
     "/home/plbarbarant/nasShare/projects/protocols/ExplorePlus_MeynielPaunovRaglio_2024/derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0"
 )
-events = get_run_events(derivatives_dir, sub="01", ses=2, run=4)
+events = get_run_events(derivatives_dir, sub="01", ses=2, run=2, onset="outcome")
 estimator = UncertaintyEstimator(
     latent_levels=[20, 40, 60, 80],
     sd=events["SD"].unique()[0],
@@ -43,8 +43,8 @@ COL_B = "#3A86C8"  # option B — mid blue
 ALPHA_S = 0.75  # stem marker alpha
 
 # ── Data ───────────────────────────────────────────────────────────────────
-surp_A = uncertainty_df["Eu_ch__obsA"] * 10
-surp_B = uncertainty_df["Eu_ch__obsB"] * 10
+surp_A = uncertainty_df["Eu_ch__obsA"] * 50
+surp_B = uncertainty_df["Eu_ch__obsB"] * 50
 mean_A = events["A_mean"]
 mean_B = events["B_mean"]
 trials = np.arange(len(surp_A))
