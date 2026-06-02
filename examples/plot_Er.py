@@ -50,7 +50,8 @@ COL_B = "#3A86C8"  # option B — mid blue
 ALPHA_S = 0.75  # stem marker alpha
 
 # ── Data ───────────────────────────────────────────────────────────────────
-surp_A = reward_df["Er"]
+surp_A = reward_df["Er"].where(reward_df["arm_choice"].eq("A"), pd.NA)
+surp_B = reward_df["Er"].where(reward_df["arm_choice"].eq("B"), pd.NA)
 mean_A = events["A_mean"]
 mean_B = events["B_mean"]
 trials = np.arange(len(surp_A))
@@ -68,7 +69,8 @@ def _stem(ax, x, y, color, label, zorder=2):
     plt.setp(markerline, markersize=4, alpha=ALPHA_S, color=color, zorder=zorder)
 
 
-_stem(ax, trials, surp_A.values, COL_A, "Er (chosen - unchosen)")
+_stem(ax, trials, surp_A.values, COL_A, "Er diff A chosen")
+_stem(ax, trials, surp_B.values, COL_B, "Er diff B chosen")
 
 ax.plot(
     trials, mean_A, color=COL_A, lw=1.6, ls="--", label="True mean — option A", zorder=4
