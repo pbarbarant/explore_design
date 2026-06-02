@@ -30,7 +30,7 @@ def make_dmtx_one_run_Er(model, events, confounds) -> pd.DataFrame:
     end_time = (n_scans - 1 + model.slice_time_ref) * model.t_r
     frame_times = np.linspace(start_time, end_time, n_scans)
 
-    # Eu_ch events without modulation
+    # Er events without modulation
     condition = np.array(
         [
             events["onset"].values,
@@ -38,22 +38,22 @@ def make_dmtx_one_run_Er(model, events, confounds) -> pd.DataFrame:
             np.ones(len(events)),  # amplitude = 1, i.e. unmodulated
         ]
     )
-    eu_ch_no_mod, _ = compute_regressor(
+    er_no_mod, _ = compute_regressor(
         exp_condition=condition,
         hrf_model=model.hrf_model,
         frame_times=frame_times,
         min_onset=model.min_onset,
     )
     confounds = confounds.copy()
-    confounds.insert(0, "Eu_ch_no_modulation", eu_ch_no_mod[:, 0])
+    confounds.insert(0, "Er_no_modulation", er_no_mod[:, 0])
 
-    # Eu_ch events with modulation
+    # Er events with modulation
     modulated_events = pd.DataFrame(
         {
             "onset": events["onset"].values,
             "duration": events["duration"].values,
-            "trial_type": "Eu_ch",
-            "modulation": pred["Eu_ch"].values,
+            "trial_type": "Er",
+            "modulation": events["Er"].values,
         }
     )
 
@@ -94,8 +94,8 @@ if __name__ == "__main__":
         derivatives_folder=derivatives_folder,
         subjects=subjects,
         mask_img=mask_img,
-        quantity_name="Eu_ch",
+        quantity_name="Er",
         onset="RT",
-        contrast_name="Eu_ch",
+        contrast_name="Er",
         dmtx_functor=make_dmtx_one_run_Er,
     )
