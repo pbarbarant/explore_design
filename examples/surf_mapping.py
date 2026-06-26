@@ -2,6 +2,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import nibabel as nib
+import numpy as np
 from nilearn.glm.first_level.first_level import _list_valid_subjects
 
 from exd.fmri_utils import get_fmri_sessions
@@ -13,6 +15,15 @@ data_dir = Path(
 )
 derivatives_dir = Path("derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0/")
 subjects = _list_valid_subjects(str(data_dir / derivatives_dir), None)
+
+
+def collapse_gifti(path):
+    """Collapse freesurfer output in a single darray"""
+    img = nib.load(path)
+    data = img.agg_data("time series")  # (n_vertices, n_timepoints)
+    new_darray = nib.gifti.GiftiDataArray(data=data.astype(np.float32))
+    new_img = nib.gifti.GiftiImage(darrays=[new_darray])
+    nib.save(new_img, path)
 
 
 def project_volume(subject, data_dir, derivatives_dir):
@@ -31,12 +42,11 @@ def project_volume(subject, data_dir, derivatives_dir):
 
         for img in runs:
             basename = img.stem.replace(".nii", "")
-            func_dir = subject_dir / "func"
 
+            # Native
             left_fmri_tex = str(fs_dir / (basename + "_individual_lh.gii"))
             right_fmri_tex = str(fs_dir / (basename + "_individual_rh.gii"))
 
-            # Native
             subprocess.run(
                 [
                     f"{FSH}/bin/mri_vol2surf",
@@ -57,6 +67,8 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
+            collapse_gifti(left_fmri_tex)
+
             subprocess.run(
                 [
                     f"{FSH}/bin/mri_vol2surf",
@@ -77,6 +89,7 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
+            collapse_gifti(right_fmri_tex)
 
             # fsaverage7
             left_fsaverage7_fmri_tex = str(fs_dir / (basename + "_fsaverage7_lh.gii"))
@@ -100,6 +113,8 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
+            collapse_gifti(left_fsaverage7_fmri_tex)
+
             subprocess.run(
                 [
                     f"{FSH}/bin/mri_surf2surf",
@@ -118,11 +133,12 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
+            collapse_gifti(right_fsaverage7_fmri_tex)
 
+            # fsaverage5
             left_fsaverage5_fmri_tex = str(fs_dir / (basename + "_fsaverage5_lh.gii"))
             right_fsaverage5_fmri_tex = str(fs_dir / (basename + "_fsaverage5_rh.gii"))
 
-            # fsaverage5
             subprocess.run(
                 [
                     f"{FSH}/bin/mri_surf2surf",
@@ -141,6 +157,8 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
+            collapse_gifti(left_fsaverage5_fmri_tex)
+
             subprocess.run(
                 [
                     f"{FSH}/bin/mri_surf2surf",
@@ -159,6 +177,7 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
+            collapse_gifti(right_fsaverage5_fmri_tex)
 
 
 for subject in subjects:
