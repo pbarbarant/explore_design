@@ -1,11 +1,13 @@
 from pathlib import Path
 
+from nilearn.datasets import load_fsaverage
 from nilearn.glm.first_level import (
     first_level_from_bids,
 )
 from nilearn.plotting import (
     plot_design_matrix,
 )
+from nilearn.surface import SurfaceImage, load_surf_data
 from tqdm import tqdm
 
 from exd.events import get_run_events
@@ -34,8 +36,7 @@ def first_level_analysis(
         task_label,
         space_label,
         sub_labels=subjects,
-        mask_img=mask_img,
-        smoothing_fwhm=3.0,
+        smoothing_fwhm=5.0,
         high_pass=1 / 128,
         t_r=1.71,
         hrf_model="spm + derivative",
@@ -90,14 +91,29 @@ def first_level_analysis(
                     dmtx, rescale=True, output_file=str(output_path_run / "dmtx.png")
                 )
 
-            model.fit(run_imgs=selected_imgs, design_matrices=design_matrices)
+            # Load surface images
+            surf_imgs = []
+            mesh = load_fsaverage("fsaverage5")["pial"]
+            for path in selected_imgs:
+                path_surf = path.replace("/func/", "/freesurfer/").replace(
+                    "_space-MNI152NLin2009cAsym", ""
+                )
+                path_lh = path_surf.replace(".nii.gz", "_fsaverage5_lh.gii")
+                path_rh = path_surf.replace(".nii.gz", "_fsaverage5_rh.gii")
+                data = {
+                    "left": load_surf_data(path_lh).T,
+                    "right": load_surf_data(path_rh).T,
+                }
+                surf_imgs.append(SurfaceImage(mesh=mesh, data=data))
+
+            model.fit(run_imgs=surf_imgs, design_matrices=design_matrices)
             for output_type in ["effect_size", "effect_variance", "z_score"]:
                 stat_map = model.compute_contrast(
                     contrast_name, output_type=output_type
                 )
-                stat_map.to_filename(
+                stat_map.data.to_filename(
                     output_path_ses
-                    / f"quantity_{quantity_name}_stat-{output_type}.nii.gz",
+                    / f"quantity_{quantity_name}_stat-{output_type}.gii",
                 )
 
 
