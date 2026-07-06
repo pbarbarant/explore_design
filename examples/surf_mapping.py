@@ -67,7 +67,6 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
-            collapse_gifti(left_fmri_tex)
 
             subprocess.run(
                 [
@@ -89,7 +88,6 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
-            collapse_gifti(right_fmri_tex)
 
             # fsaverage7
             left_fsaverage7_fmri_tex = str(fs_dir / (basename + "_fsaverage7_lh.gii"))
@@ -113,7 +111,6 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
-            collapse_gifti(left_fsaverage7_fmri_tex)
 
             subprocess.run(
                 [
@@ -133,7 +130,6 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
-            collapse_gifti(right_fsaverage7_fmri_tex)
 
             # fsaverage5
             left_fsaverage5_fmri_tex = str(fs_dir / (basename + "_fsaverage5_lh.gii"))
@@ -157,7 +153,6 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
-            collapse_gifti(left_fsaverage5_fmri_tex)
 
             subprocess.run(
                 [
@@ -177,6 +172,13 @@ def project_volume(subject, data_dir, derivatives_dir):
                 ],
                 check=True,
             )
+
+            # Save the Giftis as a single darray
+            collapse_gifti(left_fmri_tex)
+            collapse_gifti(right_fmri_tex)
+            collapse_gifti(left_fsaverage7_fmri_tex)
+            collapse_gifti(right_fsaverage7_fmri_tex)
+            collapse_gifti(left_fsaverage5_fmri_tex)
             collapse_gifti(right_fsaverage5_fmri_tex)
 
 
