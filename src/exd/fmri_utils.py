@@ -17,9 +17,7 @@ def first_level_analysis(
     data_dir,
     derivatives_folder,
     task_label,
-    space_label,
     subjects,
-    mask_img,
     quantity_name,
     onset,
     contrast_name,
@@ -34,7 +32,7 @@ def first_level_analysis(
     ) = first_level_from_bids(
         data_dir,
         task_label,
-        space_label,
+        space_label=None,
         sub_labels=subjects,
         smoothing_fwhm=5.0,
         high_pass=1 / 128,
