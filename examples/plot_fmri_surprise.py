@@ -76,21 +76,17 @@ def make_dmtx_one_run_surprise(model, events, confounds):
 
 
 if __name__ == "__main__":
-    mask_img = "data/mask.nii.gz"
     data_dir = Path(
         "/home/plbarbarant/nasShare/projects/protocols/ExplorePlus_MeynielPaunovRaglio_2024"
     )
     task_label = "ExplorePlus"
-    space_label = "MNI152NLin2009cAsym"
     derivatives_folder = "derivatives/fmriprep-24.1.1_mne-bids-pipeline-1.9.0/"
     subjects = _list_valid_subjects(str(data_dir / derivatives_folder), None)
     first_level_analysis(
         data_dir=str(data_dir),
         task_label=task_label,
-        space_label=space_label,
         derivatives_folder=derivatives_folder,
         subjects=subjects,
-        mask_img=mask_img,
         quantity_name="surprise",
         onset="outcome",
         contrast_name="Surprise",
