@@ -34,7 +34,7 @@ def first_level_analysis(
         task_label,
         space_label=None,
         sub_labels=subjects,
-        smoothing_fwhm=5.0,
+        smoothing_fwhm=3.0,
         high_pass=1 / 128,
         t_r=1.71,
         hrf_model="spm + derivative",
