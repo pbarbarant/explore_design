@@ -1,16 +1,13 @@
 # %%
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-from nilearn.glm.first_level import compute_regressor, make_first_level_design_matrix
 from nilearn.glm.first_level.first_level import _list_valid_subjects
 
-from exd.fmri_utils import first_level_analysis
+from exd.fmri_utils import first_level_analysis, make_modulated_dtmx
 from exd.models.ideal_observer import UncertaintyEstimator
 
 
-def make_dmtx_one_run_Eu_ch(model, events, confounds) -> pd.DataFrame:
+def make_dmtx_one_run_Eu_ch(model, events, confounds):
     estimator = UncertaintyEstimator(
         latent_levels=[20, 40, 60, 80],
         sd=events["SD"].unique()[0],
@@ -18,60 +15,11 @@ def make_dmtx_one_run_Eu_ch(model, events, confounds) -> pd.DataFrame:
         option_cols=["obsA", "obsB"],
     )
     pred = estimator.fit_predict(events)
-    pred["Eu_ch"] = pred["Eu_ch__obsA"] + pred["Eu_ch__obsB"]
+    events["Eu_ch"] = pred["Eu_ch__obsA"] + pred["Eu_ch__obsB"]
 
-    # Frame times
-    n_scans = len(confounds)
-    start_time = model.slice_time_ref * model.t_r
-    end_time = (n_scans - 1 + model.slice_time_ref) * model.t_r
-    frame_times = np.linspace(start_time, end_time, n_scans)
-
-    # Eu_ch events without modulation
-    condition = np.array(
-        [
-            events["onset"].values,
-            events["duration"].values,
-            np.ones(len(events)),  # amplitude = 1, i.e. unmodulated
-        ]
+    return make_modulated_dtmx(
+        model=model, events=events, confounds=confounds, quantity_name="Eu_ch"
     )
-    eu_ch_no_mod, _ = compute_regressor(
-        exp_condition=condition,
-        hrf_model=model.hrf_model,
-        frame_times=frame_times,
-        min_onset=model.min_onset,
-    )
-    confounds = confounds.copy()
-    confounds.insert(0, "Eu_ch_no_modulation", eu_ch_no_mod[:, 0])
-
-    # Eu_ch events with modulation
-    modulated_events = pd.DataFrame(
-        {
-            "onset": events["onset"].values,
-            "duration": events["duration"].values,
-            "trial_type": "Eu_ch",
-            "modulation": pred["Eu_ch"].values,
-        }
-    )
-
-    # Replace missing values in confounds
-    regs = confounds.fillna(0).to_numpy()
-
-    dmtx = make_first_level_design_matrix(
-        frame_times=frame_times,
-        events=modulated_events,
-        hrf_model=model.hrf_model,
-        drift_model=model.drift_model,
-        high_pass=model.high_pass,
-        drift_order=model.drift_order,
-        fir_delays=model.fir_delays,
-        add_regs=regs,
-        add_reg_names=confounds.columns.tolist(),
-        min_onset=model.min_onset,
-    )
-
-    # Remove dummy columns
-    dmtx = dmtx.loc[:, ~dmtx.columns.str.startswith("dummy")]
-    return dmtx
 
 
 if __name__ == "__main__":

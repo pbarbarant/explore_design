@@ -1,8 +1,12 @@
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 from nilearn.datasets import load_fsaverage
 from nilearn.glm.first_level import (
+    compute_regressor,
     first_level_from_bids,
+    make_first_level_design_matrix,
 )
 from nilearn.plotting import (
     plot_design_matrix,
@@ -127,3 +131,58 @@ def get_fmri_sessions(derivatives_dir, subject, task_label) -> set:
     pattern = f"sub-{subject}/ses-*/func"
     func_dirs = sorted(Path(derivatives_dir).glob(pattern))
     return set([int(f.parent.name.split("-")[1]) for f in func_dirs])
+
+
+def make_modulated_dtmx(model, events, confounds, quantity_name):
+    # Frame times
+    n_scans = len(confounds)
+    start_time = model.slice_time_ref * model.t_r
+    end_time = (n_scans - 1 + model.slice_time_ref) * model.t_r
+    frame_times = np.linspace(start_time, end_time, n_scans)
+
+    # Events without modulation
+    condition = np.array(
+        [
+            events["onset"].values,
+            events["duration"].values,
+            np.ones(len(events)),
+        ]
+    )
+    quantity_no_mod, _ = compute_regressor(
+        exp_condition=condition,
+        hrf_model=model.hrf_model,
+        frame_times=frame_times,
+        min_onset=model.min_onset,
+    )
+    confounds = confounds.copy()
+    confounds.insert(0, f"{quantity_name}_no_modulation", quantity_no_mod[:, 0])
+
+    # Modulation of events by the quantity of interest
+    modulated_events = pd.DataFrame(
+        {
+            "onset": events["onset"].values,
+            "duration": events["duration"].values,
+            "trial_type": f"{quantity_name}",
+            "modulation": events[f"{quantity_name}"].values,
+        }
+    )
+
+    # Replace missing values in confounds
+    regs = confounds.fillna(0).to_numpy()
+
+    dmtx = make_first_level_design_matrix(
+        frame_times=frame_times,
+        events=modulated_events,
+        hrf_model=model.hrf_model,
+        drift_model=model.drift_model,
+        high_pass=model.high_pass,
+        drift_order=model.drift_order,
+        fir_delays=model.fir_delays,
+        add_regs=regs,
+        add_reg_names=confounds.columns.tolist(),
+        min_onset=model.min_onset,
+    )
+
+    # Remove dummy columns
+    dmtx = dmtx.loc[:, ~dmtx.columns.str.startswith("dummy")]
+    return dmtx
