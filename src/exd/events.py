@@ -12,6 +12,8 @@ def make_events(
         onset = (features.trial_start + features.RT) / 1000
     elif onset == "outcome":
         onset = (features.outcome_start) / 1000
+    elif onset == "cue":
+        onset = features.trial_start / 1000
     duration = onset * 0  # Dirac event
     features = features.drop(columns=["Unnamed: 0"])
     events = pd.concat(

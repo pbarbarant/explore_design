@@ -91,7 +91,7 @@ if __name__ == "__main__":
         derivatives_folder=derivatives_folder,
         subjects=subjects,
         quantity_name="Er",
-        onset="RT",
+        onset="cue",
         contrast_name="Er",
         dmtx_functor=make_dmtx_one_run_Er,
     )
