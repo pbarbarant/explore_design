@@ -419,3 +419,62 @@ class UncertaintyEstimator(IdealObserverEstimator):
 
     def fit_predict(self, X: pd.DataFrame, y=None):
         return self.fit(X, y).predict(X)
+
+
+class PredictionErrorEstimator(IdealObserverEstimator):
+    """
+    Extends IdealObserverEstimator to predict signed prediction error
+    (observed outcome - predictive posterior expectation) per option per trial.
+
+    Uses the predictive posterior formed *before* the trial's outcome is observed,
+    i.e. the same expectation returned by IdealObserverEstimator.predict.
+
+    Parameters
+    ----------
+    unobserved_value : int or 'nan'
+        Value to fill for unchosen options (same convention as SurpriseEstimator
+        and UncertaintyEstimator).
+    All other parameters inherited from IdealObserverEstimator.
+    """
+
+    def __init__(
+        self,
+        latent_levels,
+        sd,
+        learning_params,
+        option_cols=("obsA", "obsB"),
+        condition_cols=None,
+        unobserved_value=0,
+    ):
+        super().__init__(
+            latent_levels=latent_levels,
+            sd=sd,
+            learning_params=learning_params,
+            option_cols=option_cols,
+            condition_cols=condition_cols,
+        )
+        self.unobserved_value = unobserved_value
+
+    def predict(self, X: pd.DataFrame):
+        """
+        Returns prediction error (obs - E[outcome]) per option per trial.
+        Shape: (n_trials, n_options).
+        """
+        check_is_fitted(self, "posteriors_")
+        obs, _ = self._parse_X(X)
+
+        levels = np.asarray(self.latent_levels)
+        pred = self.posteriors_["predictive_posterior"][
+            :, :, :-1
+        ]  # (n_levels, n_options, n_trials)
+        expectations = np.einsum("l,lot->ot", levels, pred)  # (n_options, n_trials)
+
+        pe = obs - expectations
+        pe = set_unobserved_value(pe, self.unobserved_value)
+        pe[:, get_missing(obs)] = np.nan
+
+        cols = ["Pe__" + c for c in self.option_cols_]
+        return pd.DataFrame(pe.T, columns=cols, index=X.index)
+
+    def fit_predict(self, X: pd.DataFrame, y=None):
+        return self.fit(X, y).predict(X)
